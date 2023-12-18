@@ -31,7 +31,7 @@ def get_image(img_cv):
 
 # load age estimation model 
 def estimation_model( num_classes=101):
-    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=False)
+    model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=False).cuda()
     dim_feats = model.fc.in_features
     model.fc = nn.Linear(dim_feats, num_classes)
     model.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -48,17 +48,10 @@ for key in list(checkpoint['state_dict'].keys()):
         del checkpoint['state_dict'][key]
 
 estimation_model.load_state_dict(checkpoint['state_dict'])
-estimation_model.eval()
+estimation_model.eval().cuda()
 
 x = torch.ones((1, 3, 224, 224))
-e_model_trt = torch2trt(estimation_model, [x])
-print(e_model_trt)
-
-#aprint(estimation_model)
-#model_trt = torch2trt(estimation_model, [x])
-#model_trt = TRTModule()
-#model_trt.load_state_dict(torch.load('age_seResNet50.pth'))
-#print(model_trt)
+e_model_trt = torch2trt(estimation_model, [x.cuda()])
 
 
 # gender classification model
@@ -75,7 +68,7 @@ model_trt = torch2trt(model_gender, [x.cuda()])
 yolo_model = YOLO('yolov.pt')
 
 # load vedio
-video_file = './vedio/man3.mp4'
+video_file = './vedio/man1.mp4'
 
 # load frame from veio
 cap = cv2.VideoCapture(video_file)      
@@ -86,7 +79,7 @@ fourcc = cv2.VideoWriter_fourcc(*'DIVX')
 gender_cat = ['female', 'male']
 
 # where to save processed vedio 
-out = cv2.VideoWriter('output2.avi', fourcc, fps, (int(width), int(height)))
+out = cv2.VideoWriter('output5.avi', fourcc, fps, (int(width), int(height)))
 
 
 while (cap.isOpened()):          
@@ -116,7 +109,7 @@ while (cap.isOpened()):
           
         # predict age
             inputs = torch.from_numpy(np.transpose(image_numpy.astype(np.float32), (0, 3, 1, 2)))
-            outputs = F.softmax(estimation_model(inputs), dim=-1).cpu().detach().numpy()
+            outputs = F.softmax(e_model_trt(inputs.cuda()), dim=-1).cpu().detach().numpy()
             ages = np.arange(0, 101)
             predicted_ages = (outputs * ages).sum(axis=-1)
       
